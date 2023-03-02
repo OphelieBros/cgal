@@ -124,6 +124,11 @@ public:
                                 &m_bounding_box,
                                 &arrays[COLOR_POINTS],
                                 nullptr, nullptr),
+    // vertex as sphere
+    /*m_buffer_for_sphere_points(&arrays[POS_SPHERE_POINTS],
+                             nullptr,
+                             &m_bounding_box,
+                             nullptr, nullptr, nullptr),*/
     m_buffer_for_mono_segments(&arrays[POS_MONO_SEGMENTS],
                                nullptr,
                                &m_bounding_box,
@@ -162,7 +167,14 @@ public:
                                &m_bounding_box,
                                &arrays[COLOR_FACES],
                                &arrays[FLAT_NORMAL_COLORED_FACES],
-                               &arrays[SMOOTH_NORMAL_COLORED_FACES])
+                               &arrays[SMOOTH_NORMAL_COLORED_FACES]),
+    // faces for sphere
+    m_buffer_for_sphere_faces(&arrays[POS_SPHERE_FACES],
+                            nullptr,
+                            &m_bounding_box,
+                            nullptr,
+                            &arrays[FLAT_NORMAL_SPHERE_FACES],
+                            &arrays[SMOOTH_NORMAL_SPHERE_FACES])
   {
     // Define 'Control+Q' as the new exit shortcut (default was 'Escape')
     setShortcut(qglviewer::EXIT_VIEWER, ::Qt::CTRL, ::Qt::Key_Q);
@@ -225,6 +237,9 @@ public:
   void set_draw_vertices(bool b) {
     m_draw_vertices = b;
   }
+  void set_draw_vertices_as_sphere(bool b) {
+    m_draw_vertices_as_sphere = b;
+  }
   void set_draw_edges(bool b) {
     m_draw_edges = b;
   }
@@ -263,6 +278,8 @@ public:
   {
     return (m_buffer_for_mono_points.is_empty() &&
             m_buffer_for_colored_points.is_empty() &&
+            // vertex as sphere
+            //m_buffer_for_sphere_points.is_empty() &&
             m_buffer_for_mono_segments.is_empty() &&
             m_buffer_for_colored_segments.is_empty() &&
             m_buffer_for_mono_rays.is_empty() &&
@@ -270,7 +287,9 @@ public:
             m_buffer_for_mono_lines.is_empty() &&
             m_buffer_for_colored_lines.is_empty() &&
             m_buffer_for_mono_faces.is_empty() &&
-            m_buffer_for_colored_faces.is_empty());
+            m_buffer_for_colored_faces.is_empty() &&
+            // faces for sphere
+            m_buffer_for_sphere_faces.is_empty());
   }
 
   const CGAL::Bbox_3& bounding_box() const
@@ -281,10 +300,13 @@ public:
     return
       m_buffer_for_mono_points.has_zero_x() &&
       m_buffer_for_colored_points.has_zero_x() &&
+      // vertex as sphere
+      //m_buffer_for_sphere_points.has_zero_x() &&
       m_buffer_for_mono_segments.has_zero_x() &&
       m_buffer_for_colored_segments.has_zero_x() &&
       m_buffer_for_mono_faces.has_zero_x() &&
       m_buffer_for_colored_faces.has_zero_x() &&
+      m_buffer_for_sphere_faces.has_zero_x() &&
       m_buffer_for_mono_rays.has_zero_x() &&
       m_buffer_for_colored_rays.has_zero_x() &&
       m_buffer_for_mono_lines.has_zero_x() &&
@@ -296,10 +318,13 @@ public:
     return
       m_buffer_for_mono_points.has_zero_y() &&
       m_buffer_for_colored_points.has_zero_y() &&
+      // vertex as sphere
+      //m_buffer_for_sphere_points.has_zero_y() &&
       m_buffer_for_mono_segments.has_zero_y() &&
       m_buffer_for_colored_segments.has_zero_y() &&
       m_buffer_for_mono_faces.has_zero_y() &&
       m_buffer_for_colored_faces.has_zero_y() &&
+      m_buffer_for_sphere_faces.has_zero_y() &&
       m_buffer_for_mono_rays.has_zero_y() &&
       m_buffer_for_colored_rays.has_zero_y() &&
       m_buffer_for_mono_lines.has_zero_y() &&
@@ -311,10 +336,13 @@ public:
     return
       m_buffer_for_mono_points.has_zero_z() &&
       m_buffer_for_colored_points.has_zero_z() &&
+      // vertex as sphere
+      //m_buffer_for_sphere_points.has_zero_z() &&
       m_buffer_for_mono_segments.has_zero_z() &&
       m_buffer_for_colored_segments.has_zero_z() &&
       m_buffer_for_mono_faces.has_zero_z() &&
       m_buffer_for_colored_faces.has_zero_z() &&
+      m_buffer_for_sphere_faces.has_zero_z() &&
       m_buffer_for_mono_rays.has_zero_z() &&
       m_buffer_for_colored_rays.has_zero_z() &&
       m_buffer_for_mono_lines.has_zero_z() &&
@@ -332,9 +360,13 @@ public:
   bool is_clipping_plane_enabled() const
   { return (m_use_clipping_plane!=CLIPPING_PLANE_OFF); }
 
+  //// Dans la fonction ajouter la creation des sphere autour du point KPoints
   template<typename KPoint>
   void add_point(const KPoint& p)
-  { m_buffer_for_mono_points.add_point(p); }
+  { 
+    m_buffer_for_mono_points.add_point(p); 
+    add_sphere(p);
+  }
 
   template<typename KPoint>
   void add_point(const KPoint& p, const CGAL::IO::Color& acolor)
@@ -418,18 +450,43 @@ public:
   bool is_a_face_started() const
   {
     return m_buffer_for_mono_faces.is_a_face_started() ||
-      m_buffer_for_colored_faces.is_a_face_started();
+      m_buffer_for_colored_faces.is_a_face_started() ||
+      // Sphere faces
+      m_buffer_for_sphere_faces.is_a_face_started();
   }
 
   void face_begin()
   {
-    if (is_a_face_started())
+    if (m_buffer_for_mono_faces.is_a_face_started())
     {
       std::cerr<<"You cannot start a new face before to finish the previous one."<<std::endl;
     }
     else
     { m_buffer_for_mono_faces.face_begin(); }
   }
+
+  void face_begin_sphere()
+  {
+    if (m_buffer_for_sphere_faces.is_a_face_started())
+    {
+      std::cerr<<"You cannot start a new face before to finish the previous one."<<std::endl;
+    }
+    else
+    { m_buffer_for_sphere_faces.face_begin(); }
+  }
+
+  // Fct Alexis
+  /*void face_begin()
+  {
+    if (m_buffer_for_mono_faces.is_a_face_started() && m_buffer_for_sphere_faces.is_a_face_started())
+    {
+      std::cerr<<"You cannot start a new face before to finish the previous one."<<std::endl;
+    }
+    else if (!m_buffer_for_sphere_faces.is_a_face_started())
+    { m_buffer_for_sphere_faces.face_begin(); }
+    else if (!m_buffer_for_mono_faces.is_a_face_started())
+    { m_buffer_for_mono_faces.face_begin(); }
+  }*/
 
   void face_begin(const CGAL::IO::Color& acolor)
   {
@@ -446,6 +503,9 @@ public:
   {
     if (m_buffer_for_mono_faces.is_a_face_started())
     { return m_buffer_for_mono_faces.add_point_in_face(kp); }
+    // Sphere face
+    else if (m_buffer_for_sphere_faces.is_a_face_started())
+    { return m_buffer_for_sphere_faces.add_point_in_face(kp); }
     else if (m_buffer_for_colored_faces.is_a_face_started())
     { return m_buffer_for_colored_faces.add_point_in_face(kp); }
     return false;
@@ -456,6 +516,9 @@ public:
   {
     if (m_buffer_for_mono_faces.is_a_face_started())
     { return m_buffer_for_mono_faces.add_point_in_face(kp, p_normal); }
+    //Sphere Face
+    else if (m_buffer_for_sphere_faces.is_a_face_started())
+    { return m_buffer_for_sphere_faces.add_point_in_face(kp, p_normal); }
     else if (m_buffer_for_colored_faces.is_a_face_started())
     { return m_buffer_for_colored_faces.add_point_in_face(kp, p_normal); }
     return false;
@@ -465,6 +528,9 @@ public:
   {
     if (m_buffer_for_mono_faces.is_a_face_started())
     { m_buffer_for_mono_faces.face_end(); }
+    // Sphere face
+    else if (m_buffer_for_sphere_faces.is_a_face_started())
+    { return m_buffer_for_sphere_faces.face_end(); }
     else if (m_buffer_for_colored_faces.is_a_face_started())
     { return m_buffer_for_colored_faces.face_end(); }
   }
@@ -522,6 +588,9 @@ protected:
     source_ = isOpenGL_4_3()
         ? fragment_source_p_l
         : fragment_source_p_l_comp;
+
+
+    //////////// POUR LUTILISATION DU SHADER
 
     QOpenGLShader *fragment_shader_p_l= new QOpenGLShader(QOpenGLShader::Fragment);
     if(!fragment_shader_p_l->compileSourceCode(source_))
@@ -607,6 +676,136 @@ protected:
     // { std::cerr << "Linking Program for clipping plane FAILED" << std::endl; }
   }
 
+  // Initialize the array arrays[POS_SPHERE_POINTS] for each vertex
+  template<typename KPoint>
+  void add_sphere(const KPoint& center, int radius = 1, int div = 4)
+  {
+    std::vector<KPoint> spherepoints;
+
+    //create array containing vertices of a unit sphere
+    double deltaTheta = M_PI / (div - 1); 
+    double deltaPhi = (2 * M_PI) / div;
+    float theta, phi;
+
+    // Vertices
+    //vertices.resize(div * div); // div * div vertices.
+    
+    for (int j = 0; j < div; j++) {
+      double angleTheta = j * deltaTheta;
+
+      for (int i = 0; i < div; i++) {
+          double anglePhi = (i + 1.0) * deltaPhi;
+
+          double x = center.x() + radius * sin(angleTheta) * cos(anglePhi);
+          double y = center.y() + radius * sin(angleTheta) * sin(anglePhi);
+          double z = center.z() + radius * cos(angleTheta);
+
+          //vertices[(j * div) + i] = Vector(x, y, z);
+          KPoint pt = KPoint(x, y, z);
+          spherepoints.push_back(pt);
+          
+          // ajouter des points dans un buffer
+          //m_buffer_for_sphere_points.add_point()
+      }
+    }
+
+
+    //A faire pour chaque face
+              //facebegin
+              //addpoint * 3
+              //faceend
+
+    // On height divisions
+    for(int k=0; k < div; k++)
+    {
+      // Around sphere rings
+      for(int l=0; l < div; l++)
+      {
+
+        // Face triangles
+        //  a --- d
+        //  | \   |
+        //  |   \ |
+        //  b --- c
+
+        //KPoint a, b, c, d = center;
+        double xa = center.x() + spherepoints[(k*div)+l].x();
+        double ya = center.y() + spherepoints[(k*div)+l].y();
+        double za = center.z() + spherepoints[(k*div)+l].z();
+        KPoint a = KPoint(xa, ya, za);
+
+        double xb = center.x() + spherepoints[(((k+1)%div)*div)+l].x();
+        double yb = center.y() + spherepoints[(((k+1)%div)*div)+l].y();
+        double zb = center.z() + spherepoints[(((k+1)%div)*div)+l].z();
+        KPoint b = KPoint(xb, yb, zb);
+
+        double xc = center.x() + spherepoints[(((k+1)%div)*div)+(l+1)%div].x();
+        double yc = center.y() + spherepoints[(((k+1)%div)*div)+(l+1)%div].y();
+        double zc = center.z() + spherepoints[(((k+1)%div)*div)+(l+1)%div].z();
+        KPoint c = KPoint(xc,yc, zc);
+
+        double xd = center.x() + spherepoints[(k*div)+(l+1)%div].x();
+        double yd = center.y() + spherepoints[(k*div)+(l+1)%div].y();
+        double zd = center.z() + spherepoints[(k*div)+(l+1)%div].z();
+        KPoint d = KPoint(xd, yd, zd);
+
+        /*//KPoint a, b, c, d = center;
+        double xa = center.x() + spherepoints[(k*div)+l][0];
+        double ya = center.y() + spherepoints[(k*div)+l][1];
+        double za = center.z() + spherepoints[(k*div)+l][2];
+        KPoint a = KPoint(xa, ya, za);
+
+        double xb = center.x() + spherepoints[(((k+1)%div)*div)+l][0];
+        double yb = center.y() + spherepoints[(((k+1)%div)*div)+l][1];
+        double zb = center.z() + spherepoints[(((k+1)%div)*div)+l][2];
+        KPoint b = KPoint(xb, yb, zb);
+
+        double xc = center.x() + spherepoints[(((k+1)%div)*div)+(l+1)%div][0];
+        double yc = center.y() + spherepoints[(((k+1)%div)*div)+(l+1)%div][1];
+        double zc = center.z() + spherepoints[(((k+1)%div)*div)+(l+1)%div][2];
+        KPoint c = KPoint(xc,yc, zc);
+
+        double xd = center.x() + spherepoints[(k*div)+(l+1)%div][0];
+        double yd = center.y() + spherepoints[(k*div)+(l+1)%div][1];
+        double zd = center.z() + spherepoints[(k*div)+(l+1)%div][2];
+        KPoint d = KPoint(xd, yd, zd);*/
+
+
+        // create face for triangle abc
+        face_begin_sphere();
+        add_point_in_face(a);
+        add_point_in_face(b);
+        add_point_in_face(c);
+        face_end();
+
+        // create face for triangle acd
+        face_begin_sphere();
+        add_point_in_face(a);
+        add_point_in_face(c);
+        add_point_in_face(d);
+        face_end();
+      }
+    }
+
+    
+    
+    //std::vector<float> spherepoints;
+
+    //Pas oublier d'implémenter les triangles
+
+    /*for(int k = 0; k < arrays[POS_MONO_POINTS].size(); k+3)
+    {
+      std::cout << "Value of array[POS_MONO_POINTS] de 0, 1 et 2 : " << std::endl;
+      std::cout << arrays[POS_MONO_POINTS][k] << " " << arrays[POS_MONO_POINTS][k+1] << " " << arrays[POS_MONO_POINTS][k+2] << std::endl;
+      for(int l = 0; l < spherepoints.size(); l+3)
+      {
+        arrays[POS_SPHERE_POINTS].push_back(spherepoints[l] + arrays[POS_MONO_POINTS][k]);
+        arrays[POS_SPHERE_POINTS].push_back(spherepoints[l+1] + arrays[POS_MONO_POINTS][k+1]);
+        arrays[POS_SPHERE_POINTS].push_back(spherepoints[l+2] + arrays[POS_MONO_POINTS][k+2]);
+      }
+    }*/
+  }
+
   void initialize_buffers()
   {
     set_camera_mode();
@@ -653,6 +852,28 @@ protected:
     buffers[bufn].release();
 
     vao[VAO_COLORED_POINTS].release();
+
+    // 1.3) Sphere points
+
+    //initialize sphere buffers 
+    //initialize_sphere_buffer();
+
+    /*vao[VAO_SPHERE_POINTS].bind();
+
+    ++bufn;
+    CGAL_assertion(bufn<NB_VBO_BUFFERS);
+    buffers[bufn].bind();
+    buffers[bufn].allocate(arrays[POS_SPHERE_POINTS].data(),
+                           static_cast<int>(arrays[POS_SPHERE_POINTS].size()*sizeof(float)));
+    rendering_program_p_l.enableAttributeArray("vertex");
+    rendering_program_p_l.setAttributeBuffer("vertex",GL_FLOAT,0,3);
+
+    buffers[bufn].release();
+
+    rendering_program_p_l.disableAttributeArray("color");
+
+    vao[VAO_SPHERE_POINTS].release();*/
+
 
     // 2) SEGMENT SHADER
 
@@ -793,6 +1014,7 @@ protected:
     // 5) FACE SHADER
     rendering_program_face.bind();
 
+    //// A reetuliser pour l'algo avec les faces
     // 5.1) Mono faces
     vao[VAO_MONO_FACES].bind();
 
@@ -881,6 +1103,48 @@ protected:
     vao[VAO_COLORED_FACES].release();
 
     rendering_program_face.release();
+
+
+
+    // 5.3) Sphere faces
+    vao[VAO_SPHERE_FACES].bind();
+
+    // 5.3.1) points of the sphere faces
+    ++bufn;
+    CGAL_assertion(bufn<NB_VBO_BUFFERS);
+    buffers[bufn].bind();
+    buffers[bufn].allocate(arrays[POS_SPHERE_FACES].data(),
+                           static_cast<int>(arrays[POS_SPHERE_FACES].size()*sizeof(float)));
+    rendering_program_face.enableAttributeArray("vertex");
+    rendering_program_face.setAttributeBuffer("vertex",GL_FLOAT,0,3);
+
+    buffers[bufn].release();
+
+////// CORE DUMP
+    // 5.3.2) normals of the sphere faces
+    ++bufn;
+    CGAL_assertion(bufn<NB_VBO_BUFFERS);
+    buffers[bufn].bind();
+    /*if (m_flatShading)
+    {*/
+    buffers[bufn].allocate(arrays[FLAT_NORMAL_SPHERE_FACES].data(),
+                                  static_cast<int>(arrays[FLAT_NORMAL_SPHERE_FACES].size()*
+                                                    sizeof(float)));
+    /*}
+    else
+    {
+      buffers[bufn].allocate(arrays[SMOOTH_NORMAL_SPHERE_FACES].data(),
+                                    static_cast<int>(arrays[SMOOTH_NORMAL_SPHERE_FACES].size()*
+                                                       sizeof(float)));
+    }*/
+    rendering_program_face.enableAttributeArray("normal");
+    rendering_program_face.setAttributeBuffer("normal",GL_FLOAT,0,3);
+
+    buffers[bufn].release();
+/////
+    // 5.3.3) color of the sphere faces
+    rendering_program_face.disableAttributeArray("color");
+    vao[VAO_SPHERE_FACES].release();
 
 
     // 6) clipping plane shader
@@ -1034,6 +1298,7 @@ protected:
 
     QColor color;
     attrib_buffers(this);
+
 
     if(m_draw_vertices)
     {
@@ -1339,6 +1604,34 @@ protected:
       rendering_program_face.release();
     }
 
+    // MODIF 22FEV POUR AJOUT MAILLAGE SPHERE
+    if(m_draw_vertices_as_sphere)
+    {
+    	/*rendering_program_face.bind();
+
+      // reference: https://stackoverflow.com/questions/37780345/opengl-how-to-create-order-independent-transparency
+      // rendering_mode == -1: draw all as solid;
+      // rendering_mode == 0: draw solid only;
+      // rendering_mode == 1: draw transparent only;
+      auto renderer = [this, &color, &clipPlane, &plane_point](float rendering_mode) {
+
+      vao[VAO_SPHERE_FACES].bind();
+      color.setRgbF((double)m_faces_mono_color.red()/(double)255,
+                    (double)m_faces_mono_color.green()/(double)255,
+                    (double)m_faces_mono_color.blue()/(double)255);
+      rendering_program_face.setAttributeValue("color",color);
+      rendering_program_face.setUniformValue("rendering_mode", rendering_mode);
+      rendering_program_face.setUniformValue("rendering_transparency", clipping_plane_rendering_transparency);
+      rendering_program_face.setUniformValue("clipPlane", clipPlane);
+      rendering_program_face.setUniformValue("pointPlane", plane_point);
+      //glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(arrays[POS_SPHERE_FACES].size()/3));
+      vao[VAO_SPHERE_FACES].release();
+
+      };
+      rendering_program_face.release();*/
+
+    }
+
     if (m_draw_text)
     {
       glDisable(GL_LIGHTING);
@@ -1533,8 +1826,20 @@ protected:
     }
     else if ((e->key()==::Qt::Key_V) && (modifiers==::Qt::NoButton))
     {
-      m_draw_vertices=!m_draw_vertices;
+      if(m_draw_vertices==m_draw_vertices_as_sphere && m_draw_vertices==false)
+      {
+        m_draw_vertices=true;
+      }
+      else if(m_draw_vertices==true){
+        m_draw_vertices_as_sphere=m_draw_vertices;
+        m_draw_vertices=!m_draw_vertices;
+      }
+      else {
+        m_draw_vertices_as_sphere=false;
+      }
+      
       displayMessage(QString("Draw vertices=%1.").arg(m_draw_vertices?"true":"false"));
+      displayMessage(QString("Draw vertices as sphere=%1.").arg(m_draw_vertices_as_sphere?"true":"false"));
       update();
     }
     else if ((e->key()==::Qt::Key_W) && (modifiers==::Qt::NoButton))
@@ -1692,6 +1997,7 @@ protected:
 
 protected:
   bool m_draw_vertices;
+  bool m_draw_vertices_as_sphere;
   bool m_draw_edges;
   bool m_draw_rays;
   bool m_draw_lines;
@@ -1714,6 +2020,8 @@ protected:
   CGAL::qglviewer::ManipulatedFrame* m_frame_plane=nullptr;
 
   double m_size_points;
+  // vertex as sphere
+  double m_size_spheres;
   double m_size_edges;
   double m_size_rays;
   double m_size_lines;
@@ -1737,6 +2045,8 @@ protected:
     BEGIN_POS=0,
     POS_MONO_POINTS=BEGIN_POS,
     POS_COLORED_POINTS,
+    //enum vertex as sphere
+    //POS_SPHERE_POINTS,
     POS_MONO_SEGMENTS,
     POS_COLORED_SEGMENTS,
     POS_MONO_RAYS,
@@ -1745,6 +2055,7 @@ protected:
     POS_COLORED_LINES,
     POS_MONO_FACES,
     POS_COLORED_FACES,
+    POS_SPHERE_FACES,
     POS_CLIPPING_PLANE,
     END_POS,
     BEGIN_COLOR=END_POS,
@@ -1759,6 +2070,8 @@ protected:
     FLAT_NORMAL_MONO_FACES,
     SMOOTH_NORMAL_COLORED_FACES,
     FLAT_NORMAL_COLORED_FACES,
+    SMOOTH_NORMAL_SPHERE_FACES,
+    FLAT_NORMAL_SPHERE_FACES,
     END_NORMAL,
     LAST_INDEX=END_NORMAL
   };
@@ -1766,6 +2079,8 @@ protected:
 
   Buffer_for_vao<float> m_buffer_for_mono_points;
   Buffer_for_vao<float> m_buffer_for_colored_points;
+  // vertex as sphere
+  //Buffer_for_vao<float> m_buffer_for_sphere_points;
   Buffer_for_vao<float> m_buffer_for_mono_segments;
   Buffer_for_vao<float> m_buffer_for_colored_segments;
   Buffer_for_vao<float> m_buffer_for_mono_rays;
@@ -1774,6 +2089,9 @@ protected:
   Buffer_for_vao<float> m_buffer_for_colored_lines;
   Buffer_for_vao<float> m_buffer_for_mono_faces;
   Buffer_for_vao<float> m_buffer_for_colored_faces;
+  // faces for sphere
+  Buffer_for_vao<float> m_buffer_for_sphere_faces;
+
   Buffer_for_vao<float> m_buffer_for_clipping_plane;
 
   static const unsigned int NB_VBO_BUFFERS=(END_POS-BEGIN_POS)+
@@ -1785,6 +2103,8 @@ protected:
   enum
     { VAO_MONO_POINTS=0,
       VAO_COLORED_POINTS,
+      // vertex as sphere
+      //VAO_SPHERE_POINTS,
       VAO_MONO_SEGMENTS,
       VAO_COLORED_SEGMENTS,
       VAO_MONO_RAYS,
@@ -1793,6 +2113,8 @@ protected:
       VAO_COLORED_LINES,
       VAO_MONO_FACES,
       VAO_COLORED_FACES,
+      // faces for sphere
+      VAO_SPHERE_FACES,
       VAO_CLIPPING_PLANE,
       NB_VAO_BUFFERS
     };
