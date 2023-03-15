@@ -99,6 +99,7 @@ public:
     m_draw_rays(draw_rays),
     m_draw_lines(draw_lines),
     m_draw_faces(draw_faces),
+    m_draw_vertices_as_sphere(!draw_vertices),
     m_flatShading(true),
     m_use_mono_color(use_mono_color),
     m_inverse_normal(inverse_normal),
@@ -124,11 +125,6 @@ public:
                                 &m_bounding_box,
                                 &arrays[COLOR_POINTS],
                                 nullptr, nullptr),
-    // vertex as sphere
-    /*m_buffer_for_sphere_points(&arrays[POS_SPHERE_POINTS],
-                             nullptr,
-                             &m_bounding_box,
-                             nullptr, nullptr, nullptr),*/
     m_buffer_for_mono_segments(&arrays[POS_MONO_SEGMENTS],
                                nullptr,
                                &m_bounding_box,
@@ -595,7 +591,6 @@ protected:
     QOpenGLShader *fragment_shader_p_l= new QOpenGLShader(QOpenGLShader::Fragment);
     if(!fragment_shader_p_l->compileSourceCode(source_))
     { std::cerr<<"Compiling fragmentsource FAILED"<<std::endl; }
-
     if(!rendering_program_p_l.addShader(vertex_shader_p_l))
     { std::cerr<<"adding vertex shader FAILED"<<std::endl; }
     if(!rendering_program_p_l.addShader(fragment_shader_p_l))
@@ -620,7 +615,6 @@ protected:
     QOpenGLShader *fragment_shader_face= new QOpenGLShader(QOpenGLShader::Fragment);
     if(!fragment_shader_face->compileSourceCode(source_))
     { std::cerr<<"Compiling fragment source FAILED"<<std::endl; }
-
     if(!rendering_program_face.addShader(vertex_shader_face))
     { std::cerr<<"adding vertex shader FAILED"<<std::endl; }
     if(!rendering_program_face.addShader(fragment_shader_face))
@@ -1125,18 +1119,18 @@ protected:
     ++bufn;
     CGAL_assertion(bufn<NB_VBO_BUFFERS);
     buffers[bufn].bind();
-    /*if (m_flatShading)
-    {*/
-    buffers[bufn].allocate(arrays[FLAT_NORMAL_SPHERE_FACES].data(),
+    if (m_flatShading)
+    {
+      buffers[bufn].allocate(arrays[FLAT_NORMAL_SPHERE_FACES].data(),
                                   static_cast<int>(arrays[FLAT_NORMAL_SPHERE_FACES].size()*
                                                     sizeof(float)));
-    /*}
+    }
     else
     {
       buffers[bufn].allocate(arrays[SMOOTH_NORMAL_SPHERE_FACES].data(),
                                     static_cast<int>(arrays[SMOOTH_NORMAL_SPHERE_FACES].size()*
                                                        sizeof(float)));
-    }*/
+    }
     rendering_program_face.enableAttributeArray("normal");
     rendering_program_face.setAttributeBuffer("normal",GL_FLOAT,0,3);
 
@@ -1607,7 +1601,7 @@ protected:
     // MODIF 22FEV POUR AJOUT MAILLAGE SPHERE
     if(m_draw_vertices_as_sphere)
     {
-    	/*rendering_program_face.bind();
+    	rendering_program_face.bind();
 
       // reference: https://stackoverflow.com/questions/37780345/opengl-how-to-create-order-independent-transparency
       // rendering_mode == -1: draw all as solid;
@@ -1619,16 +1613,16 @@ protected:
       color.setRgbF((double)m_faces_mono_color.red()/(double)255,
                     (double)m_faces_mono_color.green()/(double)255,
                     (double)m_faces_mono_color.blue()/(double)255);
-      rendering_program_face.setAttributeValue("color",color);
+      rendering_program_face.setAttributeValue("color", color);
       rendering_program_face.setUniformValue("rendering_mode", rendering_mode);
-      rendering_program_face.setUniformValue("rendering_transparency", clipping_plane_rendering_transparency);
-      rendering_program_face.setUniformValue("clipPlane", clipPlane);
-      rendering_program_face.setUniformValue("pointPlane", plane_point);
-      //glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(arrays[POS_SPHERE_FACES].size()/3));
+      //rendering_program_face.setUniformValue("rendering_transparency", clipping_plane_rendering_transparency);
+      //rendering_program_face.setUniformValue("clipPlane", clipPlane);
+      //rendering_program_face.setUniformValue("pointPlane", plane_point);
+      glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(arrays[POS_SPHERE_FACES].size()/3));
       vao[VAO_SPHERE_FACES].release();
 
       };
-      rendering_program_face.release();*/
+      rendering_program_face.release();
 
     }
 
@@ -1829,17 +1823,18 @@ protected:
       if(m_draw_vertices==m_draw_vertices_as_sphere && m_draw_vertices==false)
       {
         m_draw_vertices=true;
+        displayMessage(QString("Draw vertices=%1.").arg(m_draw_vertices?"true":"false"));
       }
       else if(m_draw_vertices==true){
         m_draw_vertices_as_sphere=m_draw_vertices;
         m_draw_vertices=!m_draw_vertices;
+        displayMessage(QString("Draw vertices as sphere=%1.").arg(m_draw_vertices_as_sphere?"true":"false"));
       }
       else {
         m_draw_vertices_as_sphere=false;
+        displayMessage(QString("Draw vertices=%1.").arg(m_draw_vertices?"true":"false"));
       }
       
-      displayMessage(QString("Draw vertices=%1.").arg(m_draw_vertices?"true":"false"));
-      displayMessage(QString("Draw vertices as sphere=%1.").arg(m_draw_vertices_as_sphere?"true":"false"));
       update();
     }
     else if ((e->key()==::Qt::Key_W) && (modifiers==::Qt::NoButton))
@@ -2045,8 +2040,6 @@ protected:
     BEGIN_POS=0,
     POS_MONO_POINTS=BEGIN_POS,
     POS_COLORED_POINTS,
-    //enum vertex as sphere
-    //POS_SPHERE_POINTS,
     POS_MONO_SEGMENTS,
     POS_COLORED_SEGMENTS,
     POS_MONO_RAYS,
@@ -2079,8 +2072,6 @@ protected:
 
   Buffer_for_vao<float> m_buffer_for_mono_points;
   Buffer_for_vao<float> m_buffer_for_colored_points;
-  // vertex as sphere
-  //Buffer_for_vao<float> m_buffer_for_sphere_points;
   Buffer_for_vao<float> m_buffer_for_mono_segments;
   Buffer_for_vao<float> m_buffer_for_colored_segments;
   Buffer_for_vao<float> m_buffer_for_mono_rays;
@@ -2091,11 +2082,10 @@ protected:
   Buffer_for_vao<float> m_buffer_for_colored_faces;
   // faces for sphere
   Buffer_for_vao<float> m_buffer_for_sphere_faces;
-
   Buffer_for_vao<float> m_buffer_for_clipping_plane;
 
   static const unsigned int NB_VBO_BUFFERS=(END_POS-BEGIN_POS)+
-    (END_COLOR-BEGIN_COLOR)+2; // +2 for 2 vectors of normals
+    (END_COLOR-BEGIN_COLOR)+3; // +3 for 3 vectors of normals (Mono, colored ou sphere)
 
   QGLBuffer buffers[NB_VBO_BUFFERS];
 
@@ -2103,8 +2093,6 @@ protected:
   enum
     { VAO_MONO_POINTS=0,
       VAO_COLORED_POINTS,
-      // vertex as sphere
-      //VAO_SPHERE_POINTS,
       VAO_MONO_SEGMENTS,
       VAO_COLORED_SEGMENTS,
       VAO_MONO_RAYS,
