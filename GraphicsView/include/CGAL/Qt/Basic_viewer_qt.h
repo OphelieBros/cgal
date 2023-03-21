@@ -171,6 +171,7 @@ public:
                             nullptr,
                             &arrays[FLAT_NORMAL_SPHERE_FACES],
                             &arrays[SMOOTH_NORMAL_SPHERE_FACES])
+    
   {
     // Define 'Control+Q' as the new exit shortcut (default was 'Escape')
     setShortcut(qglviewer::EXIT_VIEWER, ::Qt::CTRL, ::Qt::Key_Q);
@@ -360,8 +361,10 @@ public:
   template<typename KPoint>
   void add_point(const KPoint& p)
   { 
-    m_buffer_for_mono_points.add_point(p); 
-    add_sphere(p);
+    m_buffer_for_mono_points.add_point(p);
+    Local_point pp = Local_point(p.x(), p.y(), p.z());
+    kpoints_vertices.push_back(pp);
+    add_sphere(p, radius_spheres);
   }
 
   template<typename KPoint>
@@ -670,9 +673,17 @@ protected:
     // { std::cerr << "Linking Program for clipping plane FAILED" << std::endl; }
   }
 
+  void update_sphere(float radius = 0.005, int div = 6) {
+    m_buffer_for_sphere_faces.clear();
+    for(int i = 0; i < kpoints_vertices.size(); i++)
+    {
+      add_sphere(kpoints_vertices.at(i), radius, div);
+    }
+  }
+
   // Initialize the array arrays[POS_SPHERE_POINTS] for each vertex
   template<typename KPoint>
-  void add_sphere(const KPoint& center, int radius = 1, int div = 4)
+  void add_sphere(const KPoint& center, float radius = 0.005, int div = 6)
   {
     std::vector<KPoint> spherepoints;
 
@@ -690,9 +701,9 @@ protected:
       for (int i = 0; i < div; i++) {
           double anglePhi = (i + 1.0) * deltaPhi;
 
-          double x = center.x() + radius * sin(angleTheta) * cos(anglePhi);
-          double y = center.y() + radius * sin(angleTheta) * sin(anglePhi);
-          double z = center.z() + radius * cos(angleTheta);
+          double x = radius * sin(angleTheta) * cos(anglePhi);
+          double y = radius * sin(angleTheta) * sin(anglePhi);
+          double z = radius * cos(angleTheta);
 
           //vertices[(j * div) + i] = Vector(x, y, z);
           KPoint pt = KPoint(x, y, z);
@@ -1615,15 +1626,22 @@ protected:
                     (double)m_faces_mono_color.blue()/(double)255);
       rendering_program_face.setAttributeValue("color", color);
       rendering_program_face.setUniformValue("rendering_mode", rendering_mode);
-      //rendering_program_face.setUniformValue("rendering_transparency", clipping_plane_rendering_transparency);
-      //rendering_program_face.setUniformValue("clipPlane", clipPlane);
-      //rendering_program_face.setUniformValue("pointPlane", plane_point);
+      rendering_program_face.setUniformValue("rendering_transparency", clipping_plane_rendering_transparency);
+      rendering_program_face.setUniformValue("clipPlane", clipPlane);
+      rendering_program_face.setUniformValue("pointPlane", plane_point);
       glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(arrays[POS_SPHERE_FACES].size()/3));
       vao[VAO_SPHERE_FACES].release();
-
       };
-      rendering_program_face.release();
 
+      enum {
+        DRAW_SOLID_ALL = -1, // draw all mesh in solid mode
+        DRAW_SOLID_HALF, // draw only the mesh inside the clipping plane as solid
+        DRAW_TRANSPARENT_HALF // draw only the mesh outside the clipping plane as transparent
+      };
+
+      renderer(DRAW_SOLID_ALL); // call the renderer
+      rendering_program_face.release();
+      
     }
 
     if (m_draw_text)
@@ -1857,14 +1875,40 @@ protected:
     }
     else if ((e->key()==::Qt::Key_Plus) && (modifiers.testFlag(::Qt::ControlModifier)))
     {
-      m_size_points+=.5;
-      displayMessage(QString("Size of points=%1.").arg(m_size_points));
+      if(m_draw_vertices)
+      {
+        m_size_points+=.5;
+        displayMessage(QString("Size of points=%1.").arg(m_size_points));
+      }
+      if (m_draw_vertices_as_sphere)
+      {
+        //ACTION AUGMENTE TAILLE SPHERES
+        if(radius_spheres <= 15.0)
+        {
+          radius_spheres += 2.5;
+          update_sphere(radius_spheres);
+        }
+        
+      }
+
       update();
     }
     else if ((e->key()==::Qt::Key_Minus) && (modifiers.testFlag(::Qt::ControlModifier)))
     {
-      if (m_size_points>.5) m_size_points-=.5;
-      displayMessage(QString("Size of points=%1.").arg(m_size_points));
+      if(m_draw_vertices)
+      {
+        if (m_size_points>.5) m_size_points-=.5;
+        displayMessage(QString("Size of points=%1.").arg(m_size_points));
+      }
+      else if (m_draw_vertices_as_sphere)
+      {
+        //ACTION DIMINUE TAILLE SPHERES
+        if(radius_spheres >= 0.5)
+        {
+          radius_spheres -= 0.5;
+          update_sphere(radius_spheres);
+        }
+      }
       update();
     }
     else if ((e->key()==::Qt::Key_PageUp) && (modifiers==::Qt::NoButton))
@@ -2069,6 +2113,10 @@ protected:
     LAST_INDEX=END_NORMAL
   };
   std::vector<float> arrays[LAST_INDEX];
+
+  // AJOUT 20 MARS
+  std::vector<Local_point> kpoints_vertices;
+  float radius_spheres = 0.01;
 
   Buffer_for_vao<float> m_buffer_for_mono_points;
   Buffer_for_vao<float> m_buffer_for_colored_points;
