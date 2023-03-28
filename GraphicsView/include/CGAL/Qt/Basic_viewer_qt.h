@@ -53,6 +53,7 @@
 #include <CGAL/Qt/constraint.h>
 #include <CGAL/Random.h>
 #include <CGAL/assertions.h>
+#include <CGAL/squared_distance_3.h> //for 3D functions
 
 #define CGAL_BASIC_VIEWER_INIT_SIZE_X 500
 #define CGAL_BASIC_VIEWER_INIT_SIZE_Y 450
@@ -673,7 +674,7 @@ protected:
     // { std::cerr << "Linking Program for clipping plane FAILED" << std::endl; }
   }
 
-  void update_sphere(float radius = 0.005, int div = 6) {
+  void update_sphere(float radius = 0.05, int div = 6) {
     m_buffer_for_sphere_faces.clear();
     for(int i = 0; i < kpoints_vertices.size(); i++)
     {
@@ -683,7 +684,7 @@ protected:
 
   // Initialize the array arrays[POS_SPHERE_POINTS] for each vertex
   template<typename KPoint>
-  void add_sphere(const KPoint& center, float radius = 0.005, int div = 6)
+  void add_sphere(const KPoint& center, float radius = 0.05, int div = 6)
   {
     std::vector<KPoint> spherepoints;
 
@@ -1111,7 +1112,7 @@ protected:
 
 
 
-    // 5.3) Sphere faces
+    // 5.3) Spheres faces
     vao[VAO_SPHERE_FACES].bind();
 
     // 5.3.1) points of the sphere faces
@@ -1125,7 +1126,6 @@ protected:
 
     buffers[bufn].release();
 
-////// CORE DUMP
     // 5.3.2) normals of the sphere faces
     ++bufn;
     CGAL_assertion(bufn<NB_VBO_BUFFERS);
@@ -1146,7 +1146,7 @@ protected:
     rendering_program_face.setAttributeBuffer("normal",GL_FLOAT,0,3);
 
     buffers[bufn].release();
-/////
+
     // 5.3.3) color of the sphere faces
     rendering_program_face.disableAttributeArray("color");
     vao[VAO_SPHERE_FACES].release();
@@ -1215,6 +1215,7 @@ protected:
                        (bb.ymax()-bb.ymin())/2,
                        bb.zmax(), 0.0);
     GLfloat shininess =  1.0f;
+    
 
     rendering_program_face.bind();
     int mvpLocation = rendering_program_face.uniformLocation("mvp_matrix");
@@ -1693,6 +1694,7 @@ protected:
     }
     else
     { bb=bounding_box(); }
+  
     this->camera()->setSceneBoundingBox(CGAL::qglviewer::Vec(bb.xmin(),
                                                        bb.ymin(),
                                                        bb.zmin()),
@@ -1701,7 +1703,8 @@ protected:
                                                        bb.zmax()));
 
     m_frame_plane=new CGAL::qglviewer::ManipulatedFrame;
-
+    diag_bb = CGAL::squared_distance(Local_point(bb.xmin(), bb.ymin(), bb.zmin()), Local_point(bb.xmax(), bb.ymax(), bb.zmax()));
+    radius_spheres = diag_bb/400;
     this->showEntireScene();
   }
 
@@ -1883,15 +1886,14 @@ protected:
       if (m_draw_vertices_as_sphere)
       {
         //ACTION AUGMENTE TAILLE SPHERES
-        if(radius_spheres <= 15.0)
+        if(radius_spheres <= diag_bb / 200)
         {
-          radius_spheres += 2.5;
+          radius_spheres += ((diag_bb/200) - (diag_bb/600))/8;
           update_sphere(radius_spheres);
+          displayMessage(QString("Size of radius=%1.").arg(radius_spheres));
+          redraw();
         }
-        
       }
-
-      update();
     }
     else if ((e->key()==::Qt::Key_Minus) && (modifiers.testFlag(::Qt::ControlModifier)))
     {
@@ -1899,17 +1901,19 @@ protected:
       {
         if (m_size_points>.5) m_size_points-=.5;
         displayMessage(QString("Size of points=%1.").arg(m_size_points));
+        update();
       }
       else if (m_draw_vertices_as_sphere)
       {
         //ACTION DIMINUE TAILLE SPHERES
-        if(radius_spheres >= 0.5)
+        if(radius_spheres >= diag_bb / 600)
         {
-          radius_spheres -= 0.5;
+          radius_spheres -= ((diag_bb/200) - (diag_bb/600))/8;
           update_sphere(radius_spheres);
+          displayMessage(QString("Size of radius=%1.").arg(radius_spheres));
+          redraw();
         }
       }
-      update();
     }
     else if ((e->key()==::Qt::Key_PageUp) && (modifiers==::Qt::NoButton))
     {
@@ -2116,7 +2120,8 @@ protected:
 
   // AJOUT 20 MARS
   std::vector<Local_point> kpoints_vertices;
-  float radius_spheres = 0.01;
+  float diag_bb = 1.5;
+  float radius_spheres = diag_bb / 400;
 
   Buffer_for_vao<float> m_buffer_for_mono_points;
   Buffer_for_vao<float> m_buffer_for_colored_points;
